@@ -12,12 +12,12 @@ import keras
 import keras.backend as K
 
 from keras import initializers
-from keras.optimizers import Adam, RMSprop
+from keras.optimizers import Adam, Nadam, RMSprop
 from keras.utils import np_utils
 from keras.utils.generic_utils import Progbar
 from keras.datasets import mnist
 from keras.models import Model
-from keras.layers import Convolution2D, MaxPooling2D, Dense, Dropout, Activation, Flatten, Input, LeakyReLU
+from keras.layers import Conv2D, MaxPool2D, Dense, Dropout, Activation, Flatten, Input, LeakyReLU, Reshape
 
 
 def save_img(samples, n, path):
@@ -47,7 +47,7 @@ def get_data():
     y = np.concatenate((y_train, y_test), axis=0).astype('float32')
 
     # normalize the pixels
-    X /= 255
+    X /= 256
 
     # flatten
     X = X.reshape((70000, 784))
@@ -76,6 +76,18 @@ def get_generator(input_size, output_size):
     a = LeakyReLU()(a)
     a = Dense(256, kernel_initializer=xavier)(z)
     a = LeakyReLU()(a)
+
+#    a = Reshape((16, 16, 1))(a)
+#    a = Conv2D(
+#        14*14, (3, 3),
+#        padding='same',
+#        name='conv_1',
+#        kernel_initializer=xavier)(a)
+#    a = LeakyReLU()(a)
+#    a = MaxPool2D(pool_size=2)(a)
+#    a = Dropout(0.5)(a)
+#    a = Flatten()(a)
+
     a = Dense(output_size, activation='sigmoid', kernel_initializer=xavier)(a)
 
     G = Model(inputs=[z], outputs=[a], name='G')
@@ -95,6 +107,9 @@ def get_discriminator(input_size, G, G_input_size):
 
     x = Input(shape=(input_size,), name='input_x')
     a = Dense(256, kernel_initializer=xavier)(x)
+    a = LeakyReLU()(a)
+    a = Dropout(0.5)(a)
+    a = Dense(256, kernel_initializer=xavier)(a)
     a = LeakyReLU()(a)
     a = Dropout(0.5)(a)
     a = Dense(256, kernel_initializer=xavier)(a)
@@ -122,10 +137,10 @@ def get_discriminator(input_size, G, G_input_size):
 
     # D shouldn't be trained during the generator's training faze
     DG.get_layer('D').trainable = False
-    DG.compile(optimizer=RMSprop(lr=1e-3), loss=[wasserstein, 'categorical_crossentropy'])
+    DG.compile(optimizer=Nadam(lr=0.0002), loss=[wasserstein, 'categorical_crossentropy'])
 
     D.trainable = True
-    D.compile(optimizer=RMSprop(lr=1e-3), loss=[wasserstein, 'categorical_crossentropy'])
+    D.compile(optimizer=Nadam(lr=0.0002), loss=[wasserstein, 'categorical_crossentropy'])
 
     return D, DG
 
@@ -166,7 +181,7 @@ def train(D, G, DG, X, y, z_size, epochs, batch_size=32, samples_path='.'):
         for l in D.layers:
             l.trainable = True
 
-        for _ in range(5):
+        for _ in range(50):
             # clip D weights
             for l in D.layers:
                 weights = l.get_weights()
@@ -188,7 +203,8 @@ def train(D, G, DG, X, y, z_size, epochs, batch_size=32, samples_path='.'):
             fake_batch = G.predict(z)
 
             # plus sign because these examples are fakes
-            loss = D.train_on_batch(fake_batch, [np.ones(batch_size), z_classes])
+
+            loss = D.train_on_batch(fake_batch, [np.ones(batch_size), np.asarray([[0.1] * 10] * batch_size)])
             D_fake_losses.append(loss)
 
         # train G
