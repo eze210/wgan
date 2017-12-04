@@ -208,6 +208,7 @@ def train(D, G, DG, X, y, z_size, epochs, batch_size=32, samples_path='.'):
             fake_batch = G.predict(z)
 
             # plus sign because these examples are fakes
+            # all the classes are given the same probability (because we expect a fake output)
             loss = D.train_on_batch(fake_batch, [np.ones(
                 batch_size), np.asarray([[0.1] * 10] * batch_size)])
             D_fake_losses.append(loss)
