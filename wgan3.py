@@ -56,8 +56,8 @@ def get_data():
     return X
 
 
-def wasserstein(y_true, y_pred):
-    """Wasserstein loss function."""
+def mean(y_true, y_pred):
+    """MEan loss function (used for the Wasserstain loss)."""
 
     return K.mean(y_true * y_pred)
 
@@ -97,7 +97,7 @@ def get_discriminator(input_size, G, G_input_size):
     a = Dense(256, kernel_initializer=xavier)(a)
     a = LeakyReLU()(a)
     a = Dropout(0.5)(a)
-    a = Dense(1, kernel_initializer=xavier)(a)
+    a = Dense(16, kernel_initializer=xavier)(a)
     a = LeakyReLU()(a)
     a = Dropout(0.5)(a)
 
@@ -114,7 +114,7 @@ def get_discriminator(input_size, G, G_input_size):
 
     # D shouldn't be trained during the generator's training faze
     DG.get_layer('D').trainable = False
-    DG.compile(optimizer=RMSprop(lr=1e-3), loss=[wasserstein])
+    DG.compile(optimizer=RMSprop(lr=1e-3), loss=[mean])
 
     D.trainable = True
     D.compile(optimizer=RMSprop(lr=1e-3), loss=[wasserstein])
@@ -147,15 +147,11 @@ def train(D, G, DG, X, z_size, epochs, batch_size=32, samples_path='.'):
 
     for i in range(epochs):
         # train D
-        D.trainable = True
-        for l in D.layers:
-            l.trainable = True
-
         for _ in range(5):
             # clip D weights
             for l in D.layers:
                 weights = l.get_weights()
-                weights = [np.clip(w, -0.01, 0.01) for w in weights]
+                weights = [np.clip(w, -0.1, 0.1) for w in weights]
                 l.set_weights(weights)
 
             # sample a batch of real data
@@ -175,10 +171,6 @@ def train(D, G, DG, X, z_size, epochs, batch_size=32, samples_path='.'):
             D_fake_losses.append(loss)
 
         # train G
-        D.trainable = False
-        for l in D.layers:
-            l.trainable = False
-
         z = get_z_batch()
 
         loss = DG.train_on_batch(z, [-np.ones(batch_size)])
@@ -188,14 +180,14 @@ def train(D, G, DG, X, z_size, epochs, batch_size=32, samples_path='.'):
             progress_bar.update(
                 i,
                 values=[
-                    ('D_real_is_fake', np.mean(D_real_losses[-5:], axis=0)),
-                    ('D_fake_is_fake', np.mean(D_fake_losses[-5:], axis=0)),
-                    ('D(G)_is_fake', np.mean(DG_losses[-5:], axis=0)),
+                    ('D_real', np.mean(D_real_losses[-5:], axis=0)),
+                    ('D_fake', np.mean(D_fake_losses[-5:], axis=0)),
+                    ('D(G)', np.mean(DG_losses[-5:], axis=0)),
                 ]
             )
 
         # shows a generated image
-        if i % 50 == 0 and samples_path is not None:
+        if i % 1 == 0 and samples_path is not None:
             samples = G.predict(z_test)
             fig = save_img(samples, i, path=samples_path)
 
